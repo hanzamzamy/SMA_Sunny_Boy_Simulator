@@ -20,8 +20,8 @@ bool ModbusServer::start(int p) {
         return false;
     }
 
-    // Create a mapping large enough to handle addresses up to 65535
-    mb_mapping = modbus_mapping_new(0, 0, 65536, 0); 
+    // Create mapping: (coils, discrete_inputs, holding_registers, input_registers)
+    mb_mapping = modbus_mapping_new(0, 0, 65536, 65536);
     if (mb_mapping == nullptr) {
         std::cerr << "Failed to allocate modbus mapping: " << modbus_strerror(errno) << std::endl;
         modbus_free(ctx);
@@ -133,8 +133,14 @@ void ModbusServer::run() {
                     for (int i = 0; i < nb; ++i) {
                         uint16_t value;
                         if (data_model->getRegisterValue(internal_addr + i, value)) {
-                            // Store in the protocol address space for libmodbus
-                            mb_mapping->tab_registers[addr + i] = value;
+                            // Store in the correct libmodbus array based on function code
+                            if (function_code == 0x04) {
+                                // Input registers (function 4)
+                                mb_mapping->tab_input_registers[addr + i] = value;
+                            } else {
+                                // Holding registers (function 3)
+                                mb_mapping->tab_registers[addr + i] = value;
+                            }
                             std::cout << "Read internal reg " << (internal_addr + i) << " = " << value << " -> protocol addr " << (addr + i) << std::endl;
                         } else {
                             std::cout << "Internal register " << (internal_addr + i) << " not found" << std::endl;
@@ -150,6 +156,9 @@ void ModbusServer::run() {
                 }
                 
                 int reply_rc = modbus_reply(ctx, query, rc, mb_mapping);
+                if (reply_rc == -1) {
+                    std::cerr << "modbus_reply failed: " << modbus_strerror(errno) << std::endl;
+                }
                 
                 // Handle writes after reply
                 if (reply_rc > 0 && (function_code == 0x06 || function_code == 0x10)) {
