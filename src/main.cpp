@@ -1,8 +1,8 @@
-#include "digital_twin.h"
-#include "config_loader.h"
-#include "safe_data_model.h"
-#include "simulation_engine.h"
-#include "modbus_server.h"
+#include "digital_twin.hpp"
+#include "config_loader.hpp"
+#include "safe_data_model.hpp"
+#include "simulation_engine.hpp"
+#include "modbus_server.hpp"
 #include <iostream>
 #include <csignal>
 #include <memory>

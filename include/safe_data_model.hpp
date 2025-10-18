@@ -1,7 +1,7 @@
 #ifndef SAFE_DATA_MODEL_H
 #define SAFE_DATA_MODEL_H
 
-#include "digital_twin.h"
+#include "digital_twin.hpp"
 #include <vector>
 #include <unordered_map>
 #include <mutex>

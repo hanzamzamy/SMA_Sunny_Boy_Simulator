@@ -1,4 +1,4 @@
-#include "config_loader.h"
+#include "config_loader.hpp"
 #include <yaml-cpp/yaml.h>
 #include <iostream>
 #include <stdexcept>

@@ -1,4 +1,4 @@
-#include "safe_data_model.h"
+#include "safe_data_model.hpp"
 #include <iostream>
 
 void SafeDataModel::initialize(const std::vector<Register>& initial_registers) {

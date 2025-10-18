@@ -1,7 +1,7 @@
 #ifndef CONFIG_LOADER_H
 #define CONFIG_LOADER_H
 
-#include "digital_twin.h"
+#include "digital_twin.hpp"
 #include <string>
 
 /**

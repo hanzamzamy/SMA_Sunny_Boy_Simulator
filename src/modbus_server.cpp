@@ -1,7 +1,7 @@
-#include "modbus_server.h"
+#include "modbus_server.hpp"
 #include <iostream>
-#include <unistd.h>
-#include <sys/socket.h>
+#include <unistd.hpp>
+#include <sys/socket.hpp>
 
 // Custom callback implementations
 int ModbusServer::read_registers_callback(modbus_t *ctx, int addr, int nb, uint16_t *dest, void *data) {

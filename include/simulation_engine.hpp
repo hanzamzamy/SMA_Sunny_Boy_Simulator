@@ -1,8 +1,8 @@
 #ifndef SIMULATION_ENGINE_H
 #define SIMULATION_ENGINE_H
 
-#include "safe_data_model.h"
-#include "digital_twin.h"
+#include "safe_data_model.hpp"
+#include "digital_twin.hpp"
 #include <thread>
 #include <atomic>
 

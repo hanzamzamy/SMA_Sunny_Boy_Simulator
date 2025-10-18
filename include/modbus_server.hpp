@@ -1,11 +1,11 @@
 #ifndef MODBUS_SERVER_H
 #define MODBUS_SERVER_H
 
-#include "safe_data_model.h"
+#include "safe_data_model.hpp"
 #include <thread>
 #include <atomic>
 #include <memory>
-#include <modbus/modbus.h>
+#include <modbus/modbus.hpp>
 
 /**
  * @class ModbusServer
