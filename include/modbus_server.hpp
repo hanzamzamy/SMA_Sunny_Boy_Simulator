@@ -47,8 +47,8 @@ private:
      */
     void run();
 
-    uint16_t protocolToInternal(uint16_t protocol_addr);
-    uint16_t internalToProtocol(uint16_t internal_addr);
+    uint16_t protocolToInternal(uint16_t protocol_addr, int function_code = 0x04);
+    uint16_t internalToProtocol(uint16_t internal_addr, int function_code = 0x04);
 
     std::shared_ptr<SafeDataModel> data_model;
     int unit_id;

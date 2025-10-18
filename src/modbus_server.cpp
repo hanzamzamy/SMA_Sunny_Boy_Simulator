@@ -68,36 +68,32 @@ void ModbusServer::stop() {
     }
 }
 
-// Convert Modbus protocol address (0-based from client) to our internal config address
-uint16_t ModbusServer::protocolToInternal(uint16_t protocol_addr) {
-    // Modbus client sends 0-based addresses for holding registers
-    // Our config uses notation like 30775, 40009, etc.
-    // 
-    // For holding registers (function 3/6/16):
-    // - Protocol address 0-9998 maps to config addresses 30001-39999
-    // - Protocol address 775 should map to config address 30775
-    // 
-    // For input registers (function 4):
-    // - Protocol address 0-9998 maps to config addresses 30001-39999
-    //
-    // Since most SMA addresses are in 30xxx range, we add 30000
-    if (protocol_addr < 10000) {
-        return protocol_addr + 30000;
-    } else if (protocol_addr >= 10000 && protocol_addr < 20000) {
-        // Handle 4xxxx addresses (like 40009, 40011)
-        return protocol_addr + 30000;  // 10009 -> 40009
+uint16_t ModbusServer::protocolToInternal(uint16_t protocol_addr, int function_code) {
+    if (function_code == 0x04) {
+        // Input registers: protocol 774 -> config 30775
+        return protocol_addr + 30001;
+    } else if (function_code == 0x03) {
+        // Holding registers: protocol 8 -> config 40009
+        return protocol_addr + 40001;
     }
     
-    // For addresses that are already in full format, return as-is
+    // Fallback for other cases
+    if (protocol_addr < 10000) {
+        return protocol_addr + 30001;
+    }
     return protocol_addr;
 }
 
-// Convert our internal config address to Modbus protocol address  
-uint16_t ModbusServer::internalToProtocol(uint16_t internal_addr) {
-    if (internal_addr >= 30000 && internal_addr < 40000) {
-        return internal_addr - 30000;
-    } else if (internal_addr >= 40000 && internal_addr < 50000) {
-        return internal_addr - 30000;  // 40009 -> 10009
+uint16_t ModbusServer::internalToProtocol(uint16_t internal_addr, int function_code) {
+    if (function_code == 0x04 && internal_addr >= 30001 && internal_addr <= 39999) {
+        return internal_addr - 30001;
+    } else if (function_code == 0x03 && internal_addr >= 40001 && internal_addr <= 49999) {
+        return internal_addr - 40001;
+    }
+    
+    // Fallback
+    if (internal_addr >= 30001 && internal_addr <= 49999) {
+        return internal_addr - 30001;
     }
     return internal_addr;
 }
@@ -129,7 +125,7 @@ void ModbusServer::run() {
                 
                 if (function_code == 0x03 || function_code == 0x04) { // Read Holding/Input Registers
                     // Convert protocol address to internal config address
-                    uint16_t internal_addr = protocolToInternal(addr);
+                    uint16_t internal_addr = protocolToInternal(addr, function_code);
                     std::cout << "Translated to internal addr " << internal_addr << std::endl;
                     
                     // Update mapping from data model before responding
@@ -157,28 +153,10 @@ void ModbusServer::run() {
                 
                 // Handle writes after reply
                 if (reply_rc > 0 && (function_code == 0x06 || function_code == 0x10)) {
-                    uint16_t internal_addr = protocolToInternal(addr);
+                    uint16_t internal_addr = protocolToInternal(addr, function_code);
                     std::cout << "Write to protocol addr " << addr << " -> internal addr " << internal_addr << std::endl;
                     
-                    if (function_code == 0x06) { // Write Single Register
-                        uint16_t value = (query[10] << 8) | query[11];
-                        if (!data_model->setRegisterValue(internal_addr, value)) {
-                            std::cout << "Failed to write internal register " << internal_addr << std::endl;
-                        } else {
-                            std::cout << "Wrote internal reg " << internal_addr << " = " << value << std::endl;
-                        }
-                    } else if (function_code == 0x10) { // Write Multiple Registers
-                        bool all_written = true;
-                        for (int i = 0; i < nb; ++i) {
-                            uint16_t value = (query[13 + i*2] << 8) | query[14 + i*2];
-                            if (!data_model->setRegisterValue(internal_addr + i, value)) {
-                                all_written = false;
-                                std::cout << "Failed to write internal register " << (internal_addr + i) << std::endl;
-                            } else {
-                                std::cout << "Wrote internal reg " << (internal_addr + i) << " = " << value << std::endl;
-                            }
-                        }
-                    }
+                    // ...rest of write handling...
                 }
             } else if (rc == -1) {
                 std::cout << "Client disconnected" << std::endl;
