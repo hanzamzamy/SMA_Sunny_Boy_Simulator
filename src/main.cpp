@@ -12,6 +12,7 @@
 // Global pointers for signal handling
 std::unique_ptr<SimulationEngine> g_sim_engine_ptr;
 std::unique_ptr<ModbusServer> g_modbus_server_ptr;
+std::atomic<bool> g_running{true};
 
 /**
  * @brief Signal handler for graceful shutdown (e.g., on Ctrl+C).
@@ -25,6 +26,8 @@ void signal_handler(int signum) {
     if (g_sim_engine_ptr) {
         g_sim_engine_ptr->stop();
     }
+
+    g_running = false;
 }
 
 int main(int argc, char* argv[]) {
@@ -73,7 +76,7 @@ int main(int argc, char* argv[]) {
 
     // The main thread can simply wait here. The signal handler will trigger the shutdown.
     // The destructor of the unique_ptrs will handle joining the threads.
-    while(true) {
+    while(g_running) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 

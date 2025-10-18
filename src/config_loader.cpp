@@ -36,7 +36,6 @@ RegisterFormat to_format(const std::string& s) {
     throw std::runtime_error("Invalid register format: " + s);
 }
 
-
 Config ConfigLoader::loadConfig(const std::string& filename) {
     Config config;
     YAML::Node root = YAML::LoadFile(filename);
@@ -76,29 +75,30 @@ Config ConfigLoader::loadConfig(const std::string& filename) {
         reg.format = to_format(node["format"].as<std::string>());
         reg.access = to_access(node["access"].as<std::string>());
 
+        // Initialize value based on type - make sure the variant type matches RegisterType
         switch (reg.type) {
             case RegisterType::U16:
-                reg.value = node["value"] ? node["value"].as<uint16_t>() : (uint16_t)0;
+                reg.value = node["value"] ? node["value"].as<uint16_t>() : static_cast<uint16_t>(0);
                 reg.num_regs = 1;
                 break;
             case RegisterType::S16:
-                 reg.value = node["value"] ? node["value"].as<int16_t>() : (int16_t)0;
+                reg.value = node["value"] ? node["value"].as<int16_t>() : static_cast<int16_t>(0);
                 reg.num_regs = 1;
                 break;
             case RegisterType::U32:
-                 reg.value = node["value"] ? node["value"].as<uint32_t>() : (uint32_t)0;
+                reg.value = node["value"] ? node["value"].as<uint32_t>() : static_cast<uint32_t>(0);
                 reg.num_regs = 2;
                 break;
             case RegisterType::S32:
-                 reg.value = node["value"] ? node["value"].as<int32_t>() : (int32_t)0;
+                reg.value = node["value"] ? node["value"].as<int32_t>() : static_cast<int32_t>(0);
                 reg.num_regs = 2;
                 break;
             case RegisterType::U64:
-                 reg.value = node["value"] ? node["value"].as<uint64_t>() : (uint64_t)0;
+                reg.value = node["value"] ? node["value"].as<uint64_t>() : static_cast<uint64_t>(0);
                 reg.num_regs = 4;
                 break;
             case RegisterType::S64:
-                 reg.value = node["value"] ? node["value"].as<int64_t>() : (int64_t)0;
+                reg.value = node["value"] ? node["value"].as<int64_t>() : static_cast<int64_t>(0);
                 reg.num_regs = 4;
                 break;
         }
