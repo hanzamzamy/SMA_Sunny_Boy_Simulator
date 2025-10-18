@@ -1,0 +1,52 @@
+# General
+*.swp
+*.swo
+*.bak
+*.tmp
+*.temp
+*.log
+*.DS_Store
+*.directory
+
+# Compiled source
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+*.out
+*.a
+*.lib
+*.lo
+*.la
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+build/
+deps/
+Testing/
+
+# IDE specific
+.idea/
+.vscode/
+*.code-workspace
+
+# Debug files
+*.dSYM/
+*.stackdump
+*.core
+*.gch
+
+# Coverage files
+*.gcda
+*.gcno
+*.gcov
+
+# Binary files
+*.bin
+*.elf
+*.hex

@@ -1,0 +1,64 @@
+# SMA Solar Inverter Digital Twin Configuration
+# This file drives the entire simulation.
+
+device_identity:
+  unit_id: 3
+  serial_number: 123456789
+  susy_id: 270 # Example SUSy ID for a Sunny Tripower model
+  device_class: 8001 # PV Inverter
+  manufacturer: 461 # SMA
+  software_package: 0x01050A04 # Corresponds to 1.05.10.R
+
+simulation_parameters:
+  update_interval_ms: 1000 # 1 second update tick
+  max_power_watts: 10000.0 # 10kW inverter
+  efficiency_percent: 98.0
+  max_internal_temp_celsius: 75.0
+  fault_probability_percent: 0.5 # Chance of random fault per tick
+  weather_change_interval_seconds: 300 # Change weather every 5 minutes
+
+weather_models:
+  - name: "Sunny"
+    power_multiplier: 1.0
+  - name: "Partly Cloudy"
+    power_multiplier: 0.7
+  - name: "Overcast"
+    power_multiplier: 0.3
+
+registers:
+  # Identification
+  - { address: 30001, type: U32, format: RAW, access: RO, value: 104 } # Profile Version
+  - { address: 30003, type: U32, format: RAW, access: RO } # SUSy-ID (from device_identity)
+  - { address: 30005, type: U32, format: RAW, access: RO } # Serial Number (from device_identity)
+  - { address: 30051, type: U32, format: ENUM, access: RO } # Device Class (from device_identity)
+  - { address: 30053, type: U32, format: ENUM, access: RO } # Numerical ID (from device_identity -> susy_id)
+  - { address: 30055, type: U32, format: ENUM, access: RO } # Manufacturer (from device_identity)
+  - { address: 30057, type: U32, format: RAW, access: RO } # Serial Number (repeated)
+  - { address: 30059, type: U32, format: FW, access: RO } # Software Package (from device_identity)
+
+  # Device Status & Control
+  - { address: 30201, type: U32, format: ENUM, access: RO, value: 303 } # Device Status (303=Off, 307=OK, 455=Warning, 35=Error)
+  - { address: 40009, type: U32, format: ENUM, access: RW, value: 295 } # Operating State (295=MPP, 381=Stop)
+  - { address: 40011, type: U32, format: ENUM, access: RW, value: 0 } # Acknowledge Error (write 26)
+  - { address: 30217, type: U32, format: ENUM, access: RO, value: 311 } # Grid Contactor (311=Open, 51=Closed)
+  - { address: 30231, type: U32, format: FIX0, access: RO } # Max possible active power (from sim params)
+  
+  # Power and Energy
+  - { address: 30513, type: U64, format: FIX0, access: RO, value: 0 } # Total Yield (Wh)
+  - { address: 30517, type: U64, format: FIX0, access: RO, value: 0 } # Daily Yield (Wh)
+  - { address: 30521, type: U64, format: Duration, access: RO, value: 0 } # Operating Time (s)
+  - { address: 30525, type: U64, format: Duration, access: RO, value: 0 } # Feed-in Time (s)
+  - { address: 30773, type: S32, format: FIX0, access: RO, value: 0 } # DC Power Input 1 (W)
+  - { address: 30775, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power (W)
+  - { address: 30803, type: U32, format: FIX2, access: RO, value: 5000 } # Grid Frequency (50.00 Hz)
+  - { address: 30783, type: U32, format: FIX2, access: RO, value: 23000 } # L1-N Voltage (230.00 V)
+  - { address: 30797, type: U32, format: FIX3, access: RO, value: 0 } # L1 Current (A)
+
+  # Temperature
+  - { address: 30953, type: S32, format: TEMP, access: RO, value: 250 } # Internal Temperature (25.0 C)
+  
+  # Grid Guard Protected (Example)
+  - { address: 40093, type: U32, format: FIX2, access: RW, value: 19550 } # Voltage monitoring minimum threshold (V)
+  - { address: 40095, type: U32, format: FIX2, access: RW, value: 25300 } # Voltage monitoring maximum threshold (V)
+  - { address: 40135, type: U32, format: FIX2, access: RW, value: 5000 } # Nominal frequency (Hz)
+  - { address: 43090, type: U32, format: FIX0, access: RW, value: 0 } # Grid Guard Login (0=not logged in, 1=logged in)
