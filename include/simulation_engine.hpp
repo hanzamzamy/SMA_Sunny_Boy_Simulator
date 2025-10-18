@@ -5,6 +5,7 @@
 #include "digital_twin.hpp"
 #include <thread>
 #include <atomic>
+#include <memory>
 
 /**
  * @class SimulationEngine

@@ -1,36 +1,7 @@
 #include "modbus_server.hpp"
 #include <iostream>
-#include <unistd.hpp>
-#include <sys/socket.hpp>
-
-// Custom callback implementations
-int ModbusServer::read_registers_callback(modbus_t *ctx, int addr, int nb, uint16_t *dest, void *data) {
-    SafeDataModel* model = static_cast<SafeDataModel*>(data);
-    // std::cout << "CALLBACK: Read request for addr=" << addr << ", nb=" << nb << std::endl;
-    for (int i = 0; i < nb; ++i) {
-        if (!model->getRegisterValue(addr + i, dest[i])) {
-            // Handle error: return an exception or a default value
-            // For simplicity, we return 0 for non-existent registers
-            dest[i] = 0;
-        }
-    }
-    return nb;
-}
-
-int ModbusServer::write_registers_callback(modbus_t *ctx, int addr, int nb, const uint16_t *src, void *data) {
-    SafeDataModel* model = static_cast<SafeDataModel*>(data);
-    // std::cout << "CALLBACK: Write request for addr=" << addr << ", nb=" << nb << std::endl;
-    for (int i = 0; i < nb; ++i) {
-        if (!model->setRegisterValue(addr + i, src[i])) {
-            // Handle write error, e.g., to a read-only register
-            // The model itself prints a warning. We could return an exception here.
-            modbus_reply_exception(ctx, nullptr, MODBUS_EXCEPTION_ILLEGAL_DATA_ADDRESS);
-            return -1;
-        }
-    }
-    return nb;
-}
-
+#include <unistd.h>
+#include <sys/socket.h>
 
 ModbusServer::ModbusServer(std::shared_ptr<SafeDataModel> model, int id)
     : data_model(model), unit_id(id), port(0), ctx(nullptr), mb_mapping(nullptr), running(false), server_socket(-1) {}
@@ -49,17 +20,8 @@ bool ModbusServer::start(int p) {
         return false;
     }
 
-    // Set custom callbacks
-    if (modbus_set_hooks(ctx, MODBUS_HOOK_READ_REGISTERS, (modbus_hook_read_registers_t)read_registers_callback, data_model.get()) != 0 ||
-        modbus_set_hooks(ctx, MODBUS_HOOK_WRITE_REGISTERS, (modbus_hook_write_registers_t)write_registers_callback, data_model.get()) != 0) {
-        std::cerr << "Failed to set custom hooks: " << modbus_strerror(errno) << std::endl;
-        modbus_free(ctx);
-        return false;
-    }
-
-    // This mapping is now just a placeholder because we use callbacks.
-    // However, libmodbus requires a valid mapping to be allocated.
-    mb_mapping = modbus_mapping_new(0, 0, 0, 0); 
+    // Create a large enough mapping to handle all possible registers
+    mb_mapping = modbus_mapping_new(0, 0, 65536, 0); 
     if (mb_mapping == nullptr) {
         std::cerr << "Failed to allocate modbus mapping: " << modbus_strerror(errno) << std::endl;
         modbus_free(ctx);
@@ -85,7 +47,6 @@ void ModbusServer::stop() {
     if (!running) return;
     running = false;
     
-    // The modbus_receive can block. We need to unblock it by closing the socket.
     if(server_socket != -1){
         shutdown(server_socket, SHUT_RDWR);
         close(server_socket);
@@ -114,21 +75,53 @@ void ModbusServer::run() {
     while (running) {
         int rc = modbus_tcp_accept(ctx, &server_socket);
         if (rc == -1) {
-            if (running) { // Avoid error message on graceful shutdown
+            if (running) {
                 std::cerr << "Modbus accept failed: " << modbus_strerror(errno) << std::endl;
             }
             continue;
         }
 
         while(running) {
-             rc = modbus_receive(ctx, query);
-             if (rc > 0) {
-                 // The hooks are called automatically inside modbus_reply
-                 modbus_reply(ctx, query, rc, mb_mapping);
-             } else if (rc == -1) {
-                 // Connection closed or error
-                 break;
-             }
+            rc = modbus_receive(ctx, query);
+            if (rc > 0) {
+                // Handle the request manually by parsing the query
+                int function_code = query[7];
+                
+                if (function_code == 0x03 || function_code == 0x04) { // Read Holding/Input Registers
+                    int addr = (query[8] << 8) | query[9];
+                    int nb = (query[10] << 8) | query[11];
+                    
+                    // Update mapping from data model
+                    for (int i = 0; i < nb; ++i) {
+                        uint16_t value;
+                        if (data_model->getRegisterValue(addr + i, value)) {
+                            mb_mapping->tab_registers[addr + i] = value;
+                        }
+                    }
+                } else if (function_code == 0x06 || function_code == 0x10) { // Write Single/Multiple Registers
+                    // We'll handle writes after modbus_reply
+                }
+                
+                int reply_rc = modbus_reply(ctx, query, rc, mb_mapping);
+                
+                // Handle writes after reply
+                if (reply_rc > 0 && (function_code == 0x06 || function_code == 0x10)) {
+                    if (function_code == 0x06) { // Write Single Register
+                        int addr = (query[8] << 8) | query[9];
+                        uint16_t value = (query[10] << 8) | query[11];
+                        data_model->setRegisterValue(addr, value);
+                    } else if (function_code == 0x10) { // Write Multiple Registers
+                        int addr = (query[8] << 8) | query[9];
+                        int nb = (query[10] << 8) | query[11];
+                        for (int i = 0; i < nb; ++i) {
+                            uint16_t value = (query[13 + i*2] << 8) | query[14 + i*2];
+                            data_model->setRegisterValue(addr + i, value);
+                        }
+                    }
+                }
+            } else if (rc == -1) {
+                break;
+            }
         }
         modbus_close(ctx);
     }

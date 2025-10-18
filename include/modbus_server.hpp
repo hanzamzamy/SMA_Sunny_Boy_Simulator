@@ -5,7 +5,7 @@
 #include <thread>
 #include <atomic>
 #include <memory>
-#include <modbus/modbus.hpp>
+#include <modbus/modbus.h>
 
 /**
  * @class ModbusServer
@@ -55,16 +55,6 @@ private:
     std::thread server_thread;
     std::atomic<bool> running;
     int server_socket;
-
-    /**
-     * @brief Custom callback function to handle read requests.
-     */
-    static int read_registers_callback(modbus_t *ctx, int addr, int nb, uint16_t *dest, void *data);
-
-    /**
-     * @brief Custom callback function to handle write requests.
-     */
-    static int write_registers_callback(modbus_t *ctx, int addr, int nb, const uint16_t *src, void *data);
 };
 
 #endif // MODBUS_SERVER_H

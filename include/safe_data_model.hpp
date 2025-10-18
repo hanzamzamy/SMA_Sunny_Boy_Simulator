@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <optional>
+#include <variant>
 
 /**
  * @class SafeDataModel
