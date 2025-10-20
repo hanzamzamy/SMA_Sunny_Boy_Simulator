@@ -75,6 +75,7 @@ struct DeviceIdentity {
 struct WeatherModel {
     std::string name;
     double power_multiplier;
+    double temp_increase_factor;
 };
 
 /**
@@ -87,6 +88,14 @@ struct SimulationParams {
     double efficiency_percent;
     double max_internal_temp_celsius;
     double fault_probability_percent;
+    double voltage_variation_percent;
+    double grid_voltage_nominal;
+    double grid_frequency_nominal;
+    double frequency_variation_hz;
+    int daily_yield_reset_hour;
+    double ambient_temp_celsius;
+    int startup_delay_seconds;
+    int shutdown_delay_seconds;
     int weather_change_interval_seconds;
     std::vector<WeatherModel> weather_models;
 };

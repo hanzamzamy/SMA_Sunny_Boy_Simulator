@@ -57,12 +57,21 @@ Config ConfigLoader::loadConfig(const std::string& filename) {
     config.sim_params.max_internal_temp_celsius = sim_node["max_internal_temp_celsius"].as<double>();
     config.sim_params.fault_probability_percent = sim_node["fault_probability_percent"].as<double>();
     config.sim_params.weather_change_interval_seconds = sim_node["weather_change_interval_seconds"].as<int>();
+    config.sim_params.voltage_variation_percent = sim_node["voltage_variation_percent"].as<double>();
+    config.sim_params.grid_voltage_nominal = sim_node["grid_voltage_nominal"].as<double>();
+    config.sim_params.grid_frequency_nominal = sim_node["grid_frequency_nominal"].as<double>();
+    config.sim_params.frequency_variation_hz = sim_node["frequency_variation_hz"].as<double>();
+    config.sim_params.daily_yield_reset_hour = sim_node["daily_yield_reset_hour"].as<int>();
+    config.sim_params.ambient_temp_celsius = sim_node["ambient_temp_celsius"].as<double>();
+    config.sim_params.startup_delay_seconds = sim_node["startup_delay_seconds"].as<int>();
+    config.sim_params.shutdown_delay_seconds = sim_node["shutdown_delay_seconds"].as<int>();
 
     const auto& weather_nodes = root["weather_models"];
     for (const auto& node : weather_nodes) {
         config.sim_params.weather_models.push_back({
             node["name"].as<std::string>(),
-            node["power_multiplier"].as<double>()
+            node["power_multiplier"].as<double>(),
+            node["temp_increase_factor"].as<double>()
         });
     }
 

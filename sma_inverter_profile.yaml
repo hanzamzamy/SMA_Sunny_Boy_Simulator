@@ -3,27 +3,41 @@
 
 device_identity:
   unit_id: 3
-  serial_number: 123456789
-  susy_id: 270 # Example SUSy ID for a Sunny Tripower model
+  serial_number: 1930212408
+  susy_id: 302 # Sunny Boy 2.0
   device_class: 8001 # PV Inverter
   manufacturer: 461 # SMA
-  software_package: 0x01050A04 # Corresponds to 1.05.10.R
+  software_package: 0x030B0404 # Corresponds to 3.11.04.R
 
 simulation_parameters:
   update_interval_ms: 1000 # 1 second update tick
-  max_power_watts: 10000.0 # 10kW inverter
+  max_power_watts: 2000.0 # 2kW inverter
   efficiency_percent: 98.0
   max_internal_temp_celsius: 75.0
-  fault_probability_percent: 0.5 # Chance of random fault per tick
+  fault_probability_percent: 0.1 # Reduced for more realistic operation
   weather_change_interval_seconds: 300 # Change weather every 5 minutes
+  ambient_temp_celsius: 33.0
+  grid_voltage_nominal: 230.0
+  grid_frequency_nominal: 50.0
+  voltage_variation_percent: 2.0 # ±2% voltage variation
+  frequency_variation_hz: 0.2 # ±0.2 Hz frequency variation
+  startup_delay_seconds: 30 # Time to start after sunrise
+  shutdown_delay_seconds: 30 # Time to shutdown after sunset
+  daily_yield_reset_hour: 0 # Reset daily yield at midnight
 
 weather_models:
   - name: "Sunny"
     power_multiplier: 1.0
+    temp_increase_factor: 1.2
   - name: "Partly Cloudy"
     power_multiplier: 0.7
+    temp_increase_factor: 0.9
   - name: "Overcast"
     power_multiplier: 0.3
+    temp_increase_factor: 0.7
+  - name: "Rainy"
+    power_multiplier: 0.1
+    temp_increase_factor: 0.5
 
 registers:
   # Identification
@@ -31,28 +45,55 @@ registers:
   - { address: 30003, type: U32, format: RAW, access: RO } # SUSy-ID (from device_identity)
   - { address: 30005, type: U32, format: RAW, access: RO } # Serial Number (from device_identity)
   - { address: 30051, type: U32, format: ENUM, access: RO } # Device Class (from device_identity)
-  - { address: 30053, type: U32, format: ENUM, access: RO } # Numerical ID (from device_identity -> susy_id)
+  - { address: 30053, type: U32, format: ENUM, access: RO } # Device Type (from device_identity -> susy_id)
   - { address: 30055, type: U32, format: ENUM, access: RO } # Manufacturer (from device_identity)
   - { address: 30057, type: U32, format: RAW, access: RO } # Serial Number (repeated)
   - { address: 30059, type: U32, format: FW, access: RO } # Software Package (from device_identity)
 
   # Device Status & Control
-  - { address: 30201, type: U32, format: ENUM, access: RO, value: 303 } # Device Status (303=Off, 307=OK, 455=Warning, 35=Error)
+  - { address: 30197, type: U32, format: FIX0, access: RO, value: 0 } # Current Event Number
+  - { address: 30201, type: U32, format: ENUM, access: RO, value: 307 } # Device Status (303=Off, 307=OK, 455=Warning, 35=Error)
+  - { address: 30217, type: U32, format: ENUM, access: RO, value: 51 } # Grid Contactor (311=Open, 51=Closed)
+  - { address: 30219, type: U32, format: ENUM, access: RO, value: 302 } # Derating Status (302=No derating, 557=Temperature, 884=Not active, 1704=WMAX, 1705=Frequency)
+  - { address: 30229, type: U32, format: DT, access: RO, value: 0 } # Device Local Time
+  - { address: 30231, type: U32, format: FIX0, access: RO } # Max possible active power (from sim params)
+  
   - { address: 40009, type: U32, format: ENUM, access: RW, value: 295 } # Operating State (295=MPP, 381=Stop)
   - { address: 40011, type: U32, format: ENUM, access: RW, value: 0 } # Acknowledge Error (write 26)
-  - { address: 30217, type: U32, format: ENUM, access: RO, value: 311 } # Grid Contactor (311=Open, 51=Closed)
-  - { address: 30231, type: U32, format: FIX0, access: RO } # Max possible active power (from sim params)
+  - { address: 40029, type: U32, format: ENUM, access: RO, value: 295 } # Detailed Operating Status
   
   # Power and Energy
   - { address: 30513, type: U64, format: FIX0, access: RO, value: 0 } # Total Yield (Wh)
   - { address: 30517, type: U64, format: FIX0, access: RO, value: 0 } # Daily Yield (Wh)
   - { address: 30521, type: U64, format: Duration, access: RO, value: 0 } # Operating Time (s)
   - { address: 30525, type: U64, format: Duration, access: RO, value: 0 } # Feed-in Time (s)
+  - { address: 30599, type: U32, format: FIX0, access: RO, value: 0 } # Number of Grid Connections
+
+  # DC Input Measurements - String 1
+  - { address: 30769, type: S32, format: FIX3, access: RO, value: 0 } # DC Current Input 1 (A)
+  - { address: 30771, type: S32, format: FIX2, access: RO, value: 0 } # DC Voltage Input 1 (V)
   - { address: 30773, type: S32, format: FIX0, access: RO, value: 0 } # DC Power Input 1 (W)
-  - { address: 30775, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power (W)
-  - { address: 30803, type: U32, format: FIX2, access: RO, value: 5000 } # Grid Frequency (50.00 Hz)
+  
+  # DC Input Measurements - String 2
+  - { address: 30957, type: S32, format: FIX3, access: RO, value: 0 } # DC Current Input 2 (A)
+  - { address: 30959, type: S32, format: FIX2, access: RO, value: 0 } # DC Voltage Input 2 (V)
+  - { address: 30961, type: S32, format: FIX0, access: RO, value: 0 } # DC Power Input 2 (W)
+
+  # AC Power Output
+  - { address: 30775, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power Total (W)
+  - { address: 30777, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power L1 (W)
+  - { address: 30779, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power L2 (W)
+  - { address: 30781, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power L3 (W)
+  - { address: 30805, type: S32, format: FIX0, access: RO, value: 0 } # AC Reactive Power Total (VAr)
+  - { address: 30813, type: S32, format: FIX0, access: RO, value: 0 } # AC Apparent Power Total (VA)
+
+  # AC Grid Parameters
   - { address: 30783, type: U32, format: FIX2, access: RO, value: 23000 } # L1-N Voltage (230.00 V)
+  - { address: 30785, type: U32, format: FIX2, access: RO, value: 23000 } # L2-N Voltage (230.00 V)
+  - { address: 30787, type: U32, format: FIX2, access: RO, value: 23000 } # L3-N Voltage (230.00 V)
   - { address: 30797, type: U32, format: FIX3, access: RO, value: 0 } # L1 Current (A)
+  - { address: 30803, type: U32, format: FIX2, access: RO, value: 5000 } # Grid Frequency (50.00 Hz)
+  - { address: 30949, type: U32, format: FIX3, access: RO, value: 1000 } # Displacement Power Factor
 
   # Temperature
   - { address: 30953, type: S32, format: TEMP, access: RO, value: 250 } # Internal Temperature (25.0 C)

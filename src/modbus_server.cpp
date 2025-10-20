@@ -71,29 +71,29 @@ void ModbusServer::stop() {
 uint16_t ModbusServer::protocolToInternal(uint16_t protocol_addr, int function_code) {
     if (function_code == 0x04) {
         // Input registers: protocol 774 -> config 30775
-        return protocol_addr + 30001;
+        return protocol_addr - 30001;
     } else if (function_code == 0x03) {
         // Holding registers: protocol 8 -> config 40009
-        return protocol_addr + 40001;
+        return protocol_addr - 40001;
     }
     
     // Fallback for other cases
     if (protocol_addr < 10000) {
-        return protocol_addr + 30001;
+        return protocol_addr - 30001;
     }
     return protocol_addr;
 }
 
 uint16_t ModbusServer::internalToProtocol(uint16_t internal_addr, int function_code) {
     if (function_code == 0x04 && internal_addr >= 30001 && internal_addr <= 39999) {
-        return internal_addr - 30001;
+        return internal_addr + 30001;
     } else if (function_code == 0x03 && internal_addr >= 40001 && internal_addr <= 49999) {
-        return internal_addr - 40001;
+        return internal_addr + 40001;
     }
     
     // Fallback
     if (internal_addr >= 30001 && internal_addr <= 49999) {
-        return internal_addr - 30001;
+        return internal_addr + 30001;
     }
     return internal_addr;
 }
@@ -121,18 +121,13 @@ void ModbusServer::run() {
                 int addr = (query[8] << 8) | query[9];
                 int nb = (query[10] << 8) | query[11];
                 
-                std::cout << "Received function " << function_code << " for protocol addr " << addr << " nb " << nb << std::endl;
-                
                 if (function_code == 0x03 || function_code == 0x04) { // Read Holding/Input Registers
-                    // Convert protocol address to internal config address
-                    uint16_t internal_addr = protocolToInternal(addr, function_code);
-                    std::cout << "Translated to internal addr " << internal_addr << std::endl;
                     
                     // Update mapping from data model before responding
                     bool all_valid = true;
                     for (int i = 0; i < nb; ++i) {
                         uint16_t value;
-                        if (data_model->getRegisterValue(internal_addr + i, value)) {
+                        if (data_model->getRegisterValue(addr + i, value)) {
                             // Store in the correct libmodbus array based on function code
                             if (function_code == 0x04) {
                                 // Input registers (function 4)
@@ -141,9 +136,7 @@ void ModbusServer::run() {
                                 // Holding registers (function 3)
                                 mb_mapping->tab_registers[addr + i] = value;
                             }
-                            std::cout << "Read internal reg " << (internal_addr + i) << " = " << value << " -> protocol addr " << (addr + i) << std::endl;
                         } else {
-                            std::cout << "Internal register " << (internal_addr + i) << " not found" << std::endl;
                             all_valid = false;
                         }
                     }
@@ -158,14 +151,6 @@ void ModbusServer::run() {
                 int reply_rc = modbus_reply(ctx, query, rc, mb_mapping);
                 if (reply_rc == -1) {
                     std::cerr << "modbus_reply failed: " << modbus_strerror(errno) << std::endl;
-                }
-                
-                // Handle writes after reply
-                if (reply_rc > 0 && (function_code == 0x06 || function_code == 0x10)) {
-                    uint16_t internal_addr = protocolToInternal(addr, function_code);
-                    std::cout << "Write to protocol addr " << addr << " -> internal addr " << internal_addr << std::endl;
-                    
-                    // ...rest of write handling...
                 }
             } else if (rc == -1) {
                 std::cout << "Client disconnected" << std::endl;

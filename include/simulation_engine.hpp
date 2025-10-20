@@ -6,50 +6,20 @@
 #include <thread>
 #include <atomic>
 #include <memory>
+#include <random>
 
-/**
- * @class SimulationEngine
- * @brief Runs the dynamic simulation logic in a background thread.
- *
- * This class is responsible for updating the device's state over time,
- * simulating a diurnal solar cycle, weather effects, temperature changes,
- * and responding to control commands written by a Modbus client.
- */
 class SimulationEngine {
 public:
-    /**
-     * @brief Constructor for the SimulationEngine.
-     * @param data_model A shared pointer to the thread-safe data model.
-     * @param config The global configuration object.
-     */
     SimulationEngine(std::shared_ptr<SafeDataModel> data_model, const Config& config);
-
-    /**
-     * @brief Starts the simulation engine in a new thread.
-     */
     void start();
-
-    /**
-     * @brief Signals the simulation engine to stop and waits for the thread to join.
-     */
     void stop();
 
 private:
-    /**
-     * @brief The main loop of the simulation thread.
-     */
     void run();
-
-    /**
-     * @brief Updates all dynamic register values for a single simulation tick.
-     */
     void updateSimulationState();
-
-    /**
-     * @brief Calculates power output based on time of day and weather.
-     * @return The calculated power in watts.
-     */
     double calculatePowerOutput();
+    double calculateGridVoltage(int phase);
+    double calculateGridFrequency();
 
     std::shared_ptr<SafeDataModel> data_model;
     const Config& config;
@@ -61,6 +31,10 @@ private:
     DeviceState current_state;
     int current_weather_model_index;
     time_t last_weather_change_time;
+    int last_daily_reset_day;
+    
+    // Random number generation
+    std::mt19937 rng;
 };
 
 #endif // SIMULATION_ENGINE_H
