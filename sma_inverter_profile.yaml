@@ -81,19 +81,31 @@ registers:
 
   # AC Power Output
   - { address: 30775, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power Total (W)
-  - { address: 30777, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power L1 (W)
-  - { address: 30779, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power L2 (W)
-  - { address: 30781, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power L3 (W)
   - { address: 30805, type: S32, format: FIX0, access: RO, value: 0 } # AC Reactive Power Total (VAr)
   - { address: 30813, type: S32, format: FIX0, access: RO, value: 0 } # AC Apparent Power Total (VA)
+  - { address: 30803, type: U32, format: FIX2, access: RO, value: 5000 } # Grid Frequency (50.00 Hz)
+  - { address: 30949, type: U32, format: FIX3, access: RO, value: 1000 } # Displacement Power Factor
+  - { address: 30823, type: U32, format: ENUM, access: RO } # Excitation Type (1041=Leading 1042=Lagging)
 
   # AC Grid Parameters
   - { address: 30783, type: U32, format: FIX2, access: RO, value: 23000 } # L1-N Voltage (230.00 V)
   - { address: 30785, type: U32, format: FIX2, access: RO, value: 23000 } # L2-N Voltage (230.00 V)
   - { address: 30787, type: U32, format: FIX2, access: RO, value: 23000 } # L3-N Voltage (230.00 V)
+  - { address: 30789, type: U32, format: FIX2, access: RO, value: 38000 } # L1-l2 Voltage (380.00 V)
+  - { address: 30791, type: U32, format: FIX2, access: RO, value: 38000 } # L2-L3 Voltage (380.00 V)
+  - { address: 30793, type: U32, format: FIX2, access: RO, value: 38000 } # L3-L1 Voltage (380.00 V)
   - { address: 30797, type: U32, format: FIX3, access: RO, value: 0 } # L1 Current (A)
-  - { address: 30803, type: U32, format: FIX2, access: RO, value: 5000 } # Grid Frequency (50.00 Hz)
-  - { address: 30949, type: U32, format: FIX3, access: RO, value: 1000 } # Displacement Power Factor
+  - { address: 30799, type: U32, format: FIX3, access: RO, value: 0 } # L2 Current (A)
+  - { address: 30801, type: U32, format: FIX3, access: RO, value: 0 } # L3 Current (A)
+  - { address: 30777, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power L1 (W)
+  - { address: 30779, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power L2 (W)
+  - { address: 30781, type: S32, format: FIX0, access: RO, value: 0 } # AC Active Power L3 (W)
+  - { address: 30807, type: S32, format: FIX0, access: RO, value: 0 } # AC Reactive Power L1 (VAr)
+  - { address: 30809, type: S32, format: FIX0, access: RO, value: 0 } # AC Reactive Power L2 (VAr)
+  - { address: 30811, type: S32, format: FIX0, access: RO, value: 0 } # AC Reactive Power L3 (VAr)
+  - { address: 30815, type: S32, format: FIX0, access: RO, value: 0 } # AC Apparent Power L1 (VA)
+  - { address: 30817, type: S32, format: FIX0, access: RO, value: 0 } # AC Apparent Power L2 (VA)
+  - { address: 30819, type: S32, format: FIX0, access: RO, value: 0 } # AC Apparent Power L3 (VA)
 
   # Temperature
   - { address: 30953, type: S32, format: TEMP, access: RO, value: 250 } # Internal Temperature (25.0 C)

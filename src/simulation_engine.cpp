@@ -24,6 +24,8 @@ SimulationEngine::SimulationEngine(std::shared_ptr<SafeDataModel> model, const C
     rng.seed(rd());
     
     std::cout << "Inverter starting in operational state..." << std::endl;
+    std::cout << "Max Power: " << config.sim_params.max_power_watts << "W" << std::endl;
+    std::cout << "Ambient Temperature: " << config.sim_params.ambient_temp_celsius << "°C" << std::endl;
 }
 
 void SimulationEngine::start() {
@@ -133,14 +135,14 @@ void SimulationEngine::updateSimulationState() {
         std::cout << "Daily yield reset at midnight" << std::endl;
     }
 
-    // 1. Check for client commands
+    // Check for client commands
     auto op_state_val = data_model->getLogicalValue(40009);
     auto ack_error_val = data_model->getLogicalValue(40011);
 
     uint32_t op_state = op_state_val ? std::get<uint32_t>(*op_state_val) : 295;
     uint32_t ack_error = ack_error_val ? std::get<uint32_t>(*ack_error_val) : 0;
     
-    // 2. Enhanced state machine
+    // Enhanced state machine
     if (ack_error == 26 && current_state == DeviceState::ERROR) {
         current_state = DeviceState::OK; // Resume operation after error ack
         data_model->setLogicalValue(40011, (uint32_t)0);
@@ -163,26 +165,32 @@ void SimulationEngine::updateSimulationState() {
         }
     }
 
-    // 3. Calculate realistic dynamic values
+    // Calculate realistic dynamic values
     double ac_power_total = 0.0;
     double dc_power_total = 0.0;
-    uint32_t device_status_enum = 303; // Off
-    uint32_t detailed_op_status = 381; // Stop
+    uint32_t device_status_enum = 303;  // Off
+    uint32_t detailed_op_status = 381;  // Stop
     uint32_t grid_contactor_enum = 311; // Open
-    uint32_t derating_status = 302; // No derating
+    uint32_t derating_status = 302;     // No derating
     uint32_t event_number = 0;
 
     // Calculate grid parameters with realistic variations
     double voltage_l1 = calculateGridVoltage(0);
     double voltage_l2 = calculateGridVoltage(1);
     double voltage_l3 = calculateGridVoltage(2);
+    
+    // Calculate line-to-line voltages (380V for European 3-phase)
+    double voltage_l1_l2 = voltage_l1 * sqrt(3.0); // Line-to-line voltage
+    double voltage_l2_l3 = voltage_l2 * sqrt(3.0);
+    double voltage_l3_l1 = voltage_l3 * sqrt(3.0);
+    
     double grid_frequency = calculateGridFrequency();
     
     double power_factor = 0.99; // Slightly less than perfect
 
     if (current_state == DeviceState::OK) {
         ac_power_total = calculatePowerOutput();
-        if (ac_power_total > 100) { // Minimum power threshold
+        if (ac_power_total > 50) { // Minimum power threshold for 2kW inverter
             double efficiency = config.sim_params.efficiency_percent / 100.0;
             dc_power_total = ac_power_total / efficiency;
             device_status_enum = 307; // OK
@@ -208,54 +216,64 @@ void SimulationEngine::updateSimulationState() {
             }
         } else {
             // Inverter is OK but no significant power (night/early morning)
-            device_status_enum = 307; // OK
+            device_status_enum = 307;  // OK
             detailed_op_status = 1393; // Waiting for DC start conditions
             grid_contactor_enum = 311; // Open at night
         }
     } else if (current_state == DeviceState::ERROR) {
-        device_status_enum = 35; // Error
+        device_status_enum = 35;   // Error
         detailed_op_status = 1392; // Error
         grid_contactor_enum = 311; // Open
         event_number = 1001 + (rand() % 10); // Various error codes
+    } else if (current_state == DeviceState::OFF) {
+        device_status_enum = 303;  // Off
+        detailed_op_status = 381;  // Stop
+        grid_contactor_enum = 311; // Open
     }
     
-    // 4. Calculate balanced 3-phase power distribution
-    double ac_power_l1 = ac_power_total / 3.0;
-    double ac_power_l2 = ac_power_total / 3.0;
-    double ac_power_l3 = ac_power_total / 3.0;
+    // Calculate balanced 3-phase power distribution (single phase inverter simulation)
+    // For Sunny Boy 2.0, it's typically single-phase, but simulate 3-phase for completeness
+    double ac_power_l1 = ac_power_total; // All power on L1 for single-phase
+    double ac_power_l2 = 0.0; // No power on L2 for single-phase
+    double ac_power_l3 = 0.0; // No power on L3 for single-phase
     
-    // Add small imbalance for realism
-    std::uniform_real_distribution<> imbalance_dis(-0.02, 0.02);
-    ac_power_l1 *= (1.0 + imbalance_dis(rng));
-    ac_power_l2 *= (1.0 + imbalance_dis(rng));
-    ac_power_l3 = ac_power_total - ac_power_l1 - ac_power_l2; // Ensure total is conserved
+    // Calculate currents for each phase
+    double current_l1 = (voltage_l1 > 0 && ac_power_l1 > 0) ? ac_power_l1 / (voltage_l1 * power_factor) : 0.0;
+    double current_l2 = 0.0; // Single phase inverter
+    double current_l3 = 0.0; // Single phase inverter
     
-    // 5. Enhanced DC string simulation with realistic I-V curves
-    double dc_power_1 = dc_power_total * 0.52; // Slight imbalance between strings
-    double dc_power_2 = dc_power_total * 0.48;
+    // Enhanced DC string simulation - Single string for SB 2.0
+    double dc_power_1 = dc_power_total; // All power from single string
+    double dc_power_2 = 0.0; // No second string for SB 2.0
     
     // Realistic voltage calculation based on load
     double dc_voltage_1 = 0.0, dc_voltage_2 = 0.0;
     double dc_current_1 = 0.0, dc_current_2 = 0.0;
     
     if (dc_power_1 > 0) {
-        // Realistic I-V curve simulation
-        double normalized_power = dc_power_1 / (config.sim_params.max_power_watts * 0.52);
-        dc_voltage_1 = 350.0 + normalized_power * 250.0; // 350V to 600V range
+        // Realistic I-V curve simulation for smaller inverter
+        double normalized_power = dc_power_1 / config.sim_params.max_power_watts;
+        dc_voltage_1 = 150.0 + normalized_power * 250.0; // 150V to 400V range for smaller inverter
         dc_current_1 = dc_power_1 / dc_voltage_1;
     }
     
-    if (dc_power_2 > 0) {
-        double normalized_power = dc_power_2 / (config.sim_params.max_power_watts * 0.48);
-        dc_voltage_2 = 360.0 + normalized_power * 240.0; // Slightly different characteristics
-        dc_current_2 = dc_power_2 / dc_voltage_2;
-    }
+    // Calculate reactive and apparent power
+    double reactive_power_total = ac_power_total * tan(acos(power_factor));
+    double apparent_power_total = ac_power_total / power_factor;
     
-    // 6. Calculate reactive and apparent power
-    double reactive_power = ac_power_total * tan(acos(power_factor));
-    double apparent_power = ac_power_total / power_factor;
+    // Calculate per-phase reactive and apparent power
+    double reactive_power_l1 = reactive_power_total; // All on L1
+    double reactive_power_l2 = 0.0;
+    double reactive_power_l3 = 0.0;
     
-    // 7. Update energy accumulators
+    double apparent_power_l1 = apparent_power_total; // All on L1
+    double apparent_power_l2 = 0.0;
+    double apparent_power_l3 = 0.0;
+    
+    // Determine excitation type (leading/lagging)
+    uint32_t excitation_type = (reactive_power_total > 0) ? 1042 : 1041; // 1042=Lagging, 1041=Leading
+    
+    // Update energy accumulators
     double seconds_per_tick = config.sim_params.update_interval_ms / 1000.0;
     auto op_time_val = data_model->getLogicalValue(30521);
     uint64_t op_time = op_time_val ? std::get<uint64_t>(*op_time_val) : 0;
@@ -273,7 +291,7 @@ void SimulationEngine::updateSimulationState() {
     auto grid_connections_val = data_model->getLogicalValue(30599);
     uint32_t grid_connections = grid_connections_val ? std::get<uint32_t>(*grid_connections_val) : 0;
 
-    if (ac_power_total > 100) { // Only count when actually producing
+    if (ac_power_total > 50) { // Only count when actually producing
         feed_time += static_cast<uint64_t>(seconds_per_tick);
         double energy_wh = ac_power_total * (seconds_per_tick / 3600.0);
         total_yield += static_cast<uint64_t>(energy_wh);
@@ -290,7 +308,7 @@ void SimulationEngine::updateSimulationState() {
         }
     }
     
-    // 8. Calculate temperature with environmental factors
+    // Calculate temperature with environmental factors
     double power_ratio = (ac_power_total > 0) ? (ac_power_total / config.sim_params.max_power_watts) : 0.0;
     double weather_temp_factor = config.sim_params.weather_models[current_weather_model_index].temp_increase_factor;
     double internal_temp = config.sim_params.ambient_temp_celsius + 
@@ -302,7 +320,7 @@ void SimulationEngine::updateSimulationState() {
     internal_temp = prev_temp * 0.9 + internal_temp * 0.1; // Smooth temperature changes
     prev_temp = internal_temp;
     
-    // 9. Write all values to the data model
+    // Write all values to the data model
     // Status registers
     data_model->setLogicalValue(30197, event_number);
     data_model->setLogicalValue(30201, device_status_enum);
@@ -316,8 +334,21 @@ void SimulationEngine::updateSimulationState() {
     data_model->setLogicalValue(30777, static_cast<int32_t>(ac_power_l1));
     data_model->setLogicalValue(30779, static_cast<int32_t>(ac_power_l2));
     data_model->setLogicalValue(30781, static_cast<int32_t>(ac_power_l3));
-    data_model->setLogicalValue(30805, static_cast<int32_t>(reactive_power));
-    data_model->setLogicalValue(30813, static_cast<int32_t>(apparent_power));
+    data_model->setLogicalValue(30805, static_cast<int32_t>(reactive_power_total));
+    data_model->setLogicalValue(30813, static_cast<int32_t>(apparent_power_total));
+    
+    // Per-phase reactive power
+    data_model->setLogicalValue(30807, static_cast<int32_t>(reactive_power_l1));
+    data_model->setLogicalValue(30809, static_cast<int32_t>(reactive_power_l2));
+    data_model->setLogicalValue(30811, static_cast<int32_t>(reactive_power_l3));
+    
+    // Per-phase apparent power
+    data_model->setLogicalValue(30815, static_cast<int32_t>(apparent_power_l1));
+    data_model->setLogicalValue(30817, static_cast<int32_t>(apparent_power_l2));
+    data_model->setLogicalValue(30819, static_cast<int32_t>(apparent_power_l3));
+    
+    // Excitation type
+    data_model->setLogicalValue(30823, excitation_type);
     
     // DC registers with proper scaling
     data_model->setLogicalValue(30769, static_cast<int32_t>(dc_current_1 * 1000)); // FIX3
@@ -328,10 +359,22 @@ void SimulationEngine::updateSimulationState() {
     data_model->setLogicalValue(30961, static_cast<int32_t>(dc_power_2));
     
     // AC grid parameters with realistic variations
+    // Phase-to-neutral voltages
     data_model->setLogicalValue(30783, static_cast<uint32_t>(voltage_l1 * 100)); // FIX2
     data_model->setLogicalValue(30785, static_cast<uint32_t>(voltage_l2 * 100)); // FIX2
     data_model->setLogicalValue(30787, static_cast<uint32_t>(voltage_l3 * 100)); // FIX2
-    data_model->setLogicalValue(30797, static_cast<uint32_t>((ac_power_l1 / voltage_l1) * 1000)); // FIX3
+    
+    // Line-to-line voltages
+    data_model->setLogicalValue(30789, static_cast<uint32_t>(voltage_l1_l2 * 100)); // FIX2
+    data_model->setLogicalValue(30791, static_cast<uint32_t>(voltage_l2_l3 * 100)); // FIX2
+    data_model->setLogicalValue(30793, static_cast<uint32_t>(voltage_l3_l1 * 100)); // FIX2
+    
+    // Phase currents
+    data_model->setLogicalValue(30797, static_cast<uint32_t>(current_l1 * 1000)); // FIX3
+    data_model->setLogicalValue(30799, static_cast<uint32_t>(current_l2 * 1000)); // FIX3
+    data_model->setLogicalValue(30801, static_cast<uint32_t>(current_l3 * 1000)); // FIX3
+    
+    // Grid frequency and power factor
     data_model->setLogicalValue(30803, static_cast<uint32_t>(grid_frequency * 100)); // FIX2
     data_model->setLogicalValue(30949, static_cast<uint32_t>(power_factor * 1000)); // FIX3
     

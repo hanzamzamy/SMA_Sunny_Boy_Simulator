@@ -31,7 +31,7 @@ void signal_handler(int signum) {
 }
 
 int main(int argc, char* argv[]) {
-    // --- 1. Load Configuration ---
+    // Load Configuration
     std::string config_file = "sma_inverter_profile.yaml";
     if (argc > 1) {
         config_file = argv[1];
@@ -48,17 +48,17 @@ int main(int argc, char* argv[]) {
     std::cout << "Configuration loaded successfully." << std::endl;
     std::cout << "Simulating device with Serial Number: " << config.identity.serial_number << std::endl;
 
-    // --- 2. Initialize Shared Data Model ---
+    // Initialize Shared Data Model
     auto shared_data_model = std::make_shared<SafeDataModel>();
     shared_data_model->initialize(config.registers);
     std::cout << "Shared data model initialized." << std::endl;
 
-    // --- 3. Initialize and Start Simulation Engine ---
+    // Initialize and Start Simulation Engine ---
     g_sim_engine_ptr = std::make_unique<SimulationEngine>(shared_data_model, config);
     g_sim_engine_ptr->start();
     std::cout << "Simulation engine started in a background thread." << std::endl;
 
-    // --- 4. Initialize and Start Modbus Server ---
+    // Initialize and Start Modbus Server ---
     const int modbus_port = 1502; // Use a non-privileged port
     g_modbus_server_ptr = std::make_unique<ModbusServer>(shared_data_model, config.identity.unit_id);
     if (!g_modbus_server_ptr->start(modbus_port)) {
@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "Modbus TCP server started on port " << modbus_port << "." << std::endl;
 
-    // --- 5. Set up Signal Handler and Wait ---
+    // Set up Signal Handler and Wait ---
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
