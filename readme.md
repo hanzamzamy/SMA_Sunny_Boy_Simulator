@@ -1,178 +1,134 @@
 # SMA Sunny Boy Digital Twin Simulator
 
-This project implements a digital twin simulator for the SMA Sunny Boy 2.0 solar inverter. It mimics the behavior of a real inverter by simulating power output based on diurnal cycles, weather conditions, and grid parameters. The simulator communicates via Modbus TCP, allowing external systems (e.g., SCADA, monitoring software) to read and write registers as if interacting with an actual device.
+The **SMA Sunny Boy Digital Twin Simulator** is a high-fidelity C++17 implementation of a digital twin for the SMA Sunny Boy solar inverter series. It is designed to behave exactly like a physical unit on a network, providing a low-cost, high-reliability environment for testing SCADA, EMS, and industrial IoT platforms.
 
-The simulator is built in C++17, uses CMake for build management, YAML for configuration, and libmodbus for Modbus TCP server functionality. It runs in a multi-threaded environment with a simulation engine updating register values in real-time.
+## Core Architecture & Logic
 
-## Features
+The simulator operates as a multi-threaded system where the physical world (simulation) and the digital world (Modbus) are decoupled by a thread-safe data model.
 
-- **Realistic Simulation**: Models solar power output using diurnal curves, seasonal variations, and weather models (e.g., sunny, partly cloudy, overcast, rainy).
-- **Modbus TCP Server**: Supports Modbus function codes 3 (Read Holding Registers) and 4 (Read Input Registers), with basic write support for control registers.
-- **Dynamic State Management**: Simulates device states (OK, Error, Off), fault injection, temperature derating, and grid parameter variations.
-- **Configurable Parameters**: All simulation parameters, device identity, and register definitions are loaded from a YAML configuration file.
-- **Thread-Safe Data Model**: Uses mutexes to ensure safe concurrent access to register data between the simulation thread and Modbus server thread.
-- **Energy Accumulation**: Tracks total yield, daily yield, operating time, and feed-in time.
-- **Grid Simulation**: Includes realistic grid voltage, frequency, and current calculations with variations.
-- **Temperature Modeling**: Simulates internal temperature based on power output and ambient conditions.
+### 1. The Simulation Engine (`simulation_engine.cpp`)
 
-## Requirements
+This is the heart of the project. It follows physical models to generate data:
 
-- **Operating System**: Linux (tested on Ubuntu; may work on other Unix-like systems).
-- **Compiler**: GCC 7+ or Clang 5+ supporting C++17.
-- **Dependencies**:
-  - `yaml-cpp` (for parsing YAML configuration).
-  - `libmodbus` (for Modbus TCP communication).
-  - `CMake` 3.10+ (for build system).
-  - `pkg-config` (for finding libmodbus).
-  - Standard C++ libraries (threads, chrono, etc.).
-- **Hardware**: No special requirements; runs on standard desktop/server hardware.
+- **Diurnal Curve**: Uses a bell-curve (Gaussian) distribution based on the system time. It calculates `noon`, `sunrise`, and `sunset` with seasonal offsets to simulate longer days in summer.
 
-Install dependencies on Ubuntu/Debian:
+- **Thermal Inertia**: Internal temperature is calculated using the formula:
+
+  $$T_{internal} = T_{ambient} + (T_{max} - T_{ambient}) \times \frac{P_{out}}{P_{max}} \times WeatherFactor$$
+
+  A smoothing factor (thermal inertia) is applied so temperature doesn't jump instantly.
+
+- **Power Derating**: If the simulated internal temperature exceeds **65°C**, the engine automatically throttles AC output (Linear Derating) to protect the virtual hardware.
+
+### 2. Config Loader (`config_loader.cpp`)
+
+The `ConfigLoader` class uses the [`yaml-cpp`](https://github.com/jbeder/yaml-cpp) library to read the device profile and simulation parameters from the `sma_inverter_profile.yaml` file. It populates a `Config` structure that drives the entire simulation, including device identity, simulation parameters, and all Modbus registers.
+
+### 3. Safe Data Model (`safe_data_model.cpp`)
+
+Because the **Simulation Thread** writes data and the **Modbus Thread** reads/writes it, we use a mutex-protected `unordered_map`. This model handles the Splitting of data:
+
+- **Logic to Protocol**: A 32-bit value (like Serial Number) is automatically deconstructed into two 16-bit Modbus registers (High Word and Low Word) following the **Big Endian** standard used by SMA.
+
+### 4. Modbus Layer (`modbus_server.cpp`)
+
+It implements a subset of the SMA Modbus protocol. It listens on a configurable port (default 1502) and responds to Function Codes `0x03` (Read Holding) and `0x04` (Read Input). It utilizes [`libmodbus`](https://github.com/stephane/libmodbus) to manage low-level TCP frame handling, socket management, and protocol compliance.
+
+## Prerequisites
+
+- **C/C++ Compiler**: Support for C99 and C++17.
+- **CMake**: Version 3.10+.
+- **Dependencies**: `libmodbus` and `yaml-cpp`.
+
+
+## Building on Linux/macOS
+
+### Option 1: Install Prebuilt Packages (Linux only)
+
+On Ubuntu/Debian:
+
 ```bash
 sudo apt update
 sudo apt install build-essential cmake libyaml-cpp-dev libmodbus-dev pkg-config
 ```
 
-## Building Dependencies from Source
+Then, jump to step 4.
 
-If you prefer to build dependencies from source (e.g., for custom versions or if packages are not available), follow these steps. Note that `yaml-cpp` is licensed under MIT, and `libmodbus` is licensed under LGPL-2.1.
+### Option 2: Build Dependencies from Source
 
-### Building yaml-cpp
+If your distro doesn't support the binary packages, follow these steps:
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/jbeder/yaml-cpp.git
-   cd yaml-cpp
-   ```
+#### 1. Build `yaml-cpp`
 
-2. Create a build directory and build:
-   ```bash
-   mkdir build
-   cd build
-   cmake ..
-   make
-   ```
+```bash
+git clone https://github.com/jbeder/yaml-cpp.git
+cd yaml-cpp && mkdir build && cd build
+cmake -DYAML_BUILD_SHARED_LIBS=ON ..
+make -j$(nproc)
+sudo make install
+```
 
-3. Install system-wide (optional):
-   ```bash
-   sudo make install
-   ```
+#### 2. Build `libmodbus`
 
-### Building libmodbus
+```bash
+git clone [https://github.com/stephane/libmodbus.git](https://github.com/stephane/libmodbus.git)
+cd libmodbus
+./autogen.sh
+./configure
+make && sudo make install
+```
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/stephane/libmodbus.git
-   cd libmodbus
-   ```
+#### 3. Build the Simulator
 
-2. Build using autotools:
-   ```bash
-   ./autogen.sh
-   ./configure
-   make
-   ```
+```bash
+cd SMA_Sunny_Boy_Simulator
+mkdir build && cd build
+cmake ..
+make
+```
 
-3. Install system-wide (optional):
-   ```bash
-   sudo make install
-   ```
 
-After building and installing from source, proceed with the project build as described in the Installation section.
+## Building on Windows (vcpkg)
 
-## Installation
+### 1. Install vcpkg
 
-1. **Clone or Download the Repository**:
-   - Ensure the project files are in a directory, e.g., `/path/to/SMA_SUNNY_BOY_Simulator`.
+```powershell
+git clone https://github.com/microsoft/vcpkg
+.\vcpkg\bootstrap-vcpkg.bat
+```
 
-2. **Build the Project**:
-   - Navigate to the project root directory.
-   - Create a build directory and run CMake:
-     ```bash
-     mkdir build
-     cd build
-     cmake ..
-     make
-     ```
-   - This generates the executable `sunny_boy_digital_twin` in the build directory.
-   - The YAML configuration file sma_inverter_profile.yaml is automatically copied to the build directory.
+### 2. Install Libs
 
-3. **Optional: Install System-Wide**:
-   - From the build directory:
-     ```bash
-     sudo make install
-     ```
-   - This installs the executable to bin and the config file to etc.
+```powershell
+vcpkg install libmodbus:x64-windows yaml-cpp:x64-windows
+```
 
-## Usage
+### 3. Build the Simulator
 
-1. **Run the Simulator**:
-   - From the build directory:
-     ```bash
-     ./sunny_boy_digital_twin
-     ```
-   - Or, if installed:
-     ```bash
-     sunny_boy_digital_twin
-     ```
-   - The simulator starts a Modbus TCP server on port 1502 (configurable via code).
-   - It loads configuration from sma_inverter_profile.yaml (or specify a custom file as the first argument).
-   - Output shows initialization messages, simulation start, and weather changes.
+```powershell
+cmake -B build -DCMAKE_TOOLCHAIN_FILE=C:/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build --config Release
+```
 
-2. **Connect via Modbus**:
-   - Use a Modbus client (e.g., `modbus-cli`, Python's `pymodbus`, or SCADA software) to connect to `127.0.0.1:1502` (unit ID 3).
-   - Read registers (e.g., function 4 for input registers like power output at address 30775).
-   - Write to control registers (e.g., function 16 for holding registers like operating state at 40009).
-   - Example with `modbus-cli` (install via `pip install modbus-cli`):
-     ```bash
-     modbus read 127.0.0.1 1502 3 4 30775 1  # Read AC power total
-     ```
 
-3. **Shutdown**:
-   - Press `Ctrl+C` to gracefully stop the simulator. It joins threads and cleans up resources.
+## Development & Hacking
 
-## Configuration
+How to add a new simulated behavior:
+1. **Define Register**: Add the address and type to `sma_inverter_profile.yaml`.
+2. **Update Logic**: In `simulation_engine.cpp`, within the `updateSimulationState()` function, calculate your new variable.
+3. **Commit to Model**: Use `data_model->setLogicalValue(ADDRESS, VALUE);`.
 
-The simulator is driven by sma_inverter_profile.yaml. This file defines device identity, simulation parameters, and all Modbus registers.
+Hacking for Stress Testing:
+- **Fault Injection**: Change `fault_probability_percent` in the YAML to a high value (e.g., `50.0`) to force the system into an `ERROR` state (Status `35`) frequently.
+- Time Acceleration: You can hack the system time by modifying the `seconds_per_tick` calculation in the code to simulate a full 24-hour cycle in just a few minutes.
 
-### Key Sections
+## Integration Options
 
-- **device_identity**: Static info like serial number, SUSy-ID, manufacturer.
-- **simulation_parameters**: Controls like max power, efficiency, weather models, update interval.
-- **registers**: List of Modbus registers with address, type (e.g., U32), format (e.g., FIX0), access (RO/RW), and initial value.
-
-### Example Customization
-
-- Change max power: Edit `max_power_watts` in `simulation_parameters`.
-- Add a weather model: Append to `weather_models` list.
-- Modify a register: Update the `registers` list (ensure address uniqueness).
-
-Reload by restarting the simulator. Invalid YAML causes a runtime error.
-
-## Architecture
-
-- **main.cpp**: Entry point. Loads config, initializes data model, starts simulation engine and Modbus server, handles signals.
-- **simulation_engine.cpp**: Core simulation loop. Updates registers based on time, weather, and state. Runs in a separate thread.
-- **modbus_server.cpp**: Modbus TCP server. Handles client connections, reads/writes registers. Runs in a separate thread.
-- **safe_data_model.cpp**: Thread-safe storage for registers. Maps logical registers to 16-bit Modbus registers.
-- **config_loader.cpp**: Parses YAML into `Config` struct.
-- **digital_twin.hpp**: Defines structs for config, registers, etc.
-- **CMakeLists.txt**: Build configuration. Finds dependencies, compiles sources, links libraries.
-
-Threads: Main thread waits for shutdown; simulation thread updates data; Modbus thread serves clients.
-
-## Troubleshooting
-
-- **Build Errors**: Ensure all dependencies are installed. Check CMake output for missing packages.
-- **Runtime Errors**: Verify YAML syntax (use an online validator). Check console for "Failed to start Modbus server" or config load errors.
-- **Connection Issues**: Confirm port 1502 is free. Use `netstat -tlnp | grep 1502` to check.
-- **Simulation Not Updating**: Ensure update interval is set (default 1000ms). Check logs for weather changes.
-- **Performance**: On low-end hardware, increase `update_interval_ms` to reduce CPU usage.
-
-## Contributing
-
-This is a simulation project. Contributions welcome via pull requests. Focus on improving realism (e.g., more accurate solar models) or adding features (e.g., additional Modbus functions).
+This Simulator is a **Modbus Server**. It needs client to serve.
+1. **Sister Project**: You can pair this simulator to its sister project [SMA Inverter Modbus to OPC UA Gateway](https://github.com/hanzamzamy/SMA_Sunny_Boy_OPC_Server/), which combine Modbus Client and OPC UA Server, by pointing the Gateway to this Simulator (`127.0.0.1:1502`).
+2. **Modbus Client**: Use other Modbus Client application or write your own.
+3. SCADA Ecosystem: Some proprietary softwares provide ecosystem that include communication via Modbus TCP, OPC Server, and SCADA & HMI solution.
 
 ## License
 
-MIT License.
+MIT License - 2025 Rayhan Zamzamy.
